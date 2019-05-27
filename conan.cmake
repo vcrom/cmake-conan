@@ -348,10 +348,9 @@ function(conan_cmake_install)
         endif()
     endforeach()
     if(ARGUMENTS_CONAN_COMMAND)
-       set(conan_command ${ARGUMENTS_CONAN_COMMAND})
-    else()
-      set(conan_command conan)
+       set(CONAN_CMD ${ARGUMENTS_CONAN_COMMAND})
     endif()
+    conan_check(REQUIRED)
     set(CONAN_OPTIONS "")
     if(ARGUMENTS_CONANFILE)
       set(CONANFILE ${CMAKE_CURRENT_SOURCE_DIR}/${ARGUMENTS_CONANFILE})
@@ -381,16 +380,16 @@ function(conan_cmake_install)
     set(conan_args install ${CONANFILE} ${settings} ${CONAN_ENV_VARS} ${CONAN_GENERATORS} ${CONAN_BUILD_POLICY} ${CONAN_INSTALL_UPDATE} ${CONAN_INSTALL_NO_IMPORTS} ${CONAN_OPTIONS} ${CONAN_INSTALL_FOLDER} ${ARGUMENTS_INSTALL_ARGS})
 
     string (REPLACE ";" " " _conan_args "${conan_args}")
-    message(STATUS "Conan executing: ${conan_command} ${_conan_args}")
+    message(STATUS "Conan executing: ${CONAN_CMD} ${_conan_args}")
 
     if(ARGUMENTS_OUTPUT_QUIET)
-        execute_process(COMMAND ${conan_command} ${conan_args}
+        execute_process(COMMAND ${CONAN_CMD} ${conan_args}
                         RESULT_VARIABLE return_code
                         OUTPUT_VARIABLE conan_output
                         ERROR_VARIABLE conan_output
                         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     else()
-        execute_process(COMMAND ${conan_command} ${conan_args}
+        execute_process(COMMAND ${CONAN_CMD} ${conan_args}
                         RESULT_VARIABLE return_code
                         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     endif()
@@ -505,7 +504,8 @@ macro(conan_cmake_run)
 endmacro()
 
 macro(conan_check)
-    # Checks conan availability in PATH
+    # Checks conan availability in PATH, and sets CONAN_CMD variable if not already 
+    # defined.
     # Arguments REQUIRED and VERSION are optional
     # Example usage:
     #    conan_check(VERSION 1.0.0 REQUIRED)
@@ -513,18 +513,20 @@ macro(conan_check)
     set(options REQUIRED)
     set(oneValueArgs VERSION)
     cmake_parse_arguments(CONAN "${options}" "${oneValueArgs}" "" ${ARGN})
-
-    find_program(CONAN_CMD conan)
-    if(NOT CONAN_CMD AND CONAN_REQUIRED)
-        message(FATAL_ERROR "Conan executable not found!")
+    if(NOT DEFINED CONAN_CMD)
+        find_program(CONAN_CMD conan)
+        if(NOT CONAN_CMD AND CONAN_REQUIRED)
+            message(FATAL_ERROR "Conan executable not found!")
+        endif()
+        message(STATUS "Conan: Found program ${CONAN_CMD}")
     endif()
-    message(STATUS "Conan: Found program ${CONAN_CMD}")
-    execute_process(COMMAND ${CONAN_CMD} --version
-                    OUTPUT_VARIABLE CONAN_VERSION_OUTPUT
-                    ERROR_VARIABLE CONAN_VERSION_OUTPUT)
-    message(STATUS "Conan: Version found ${CONAN_VERSION_OUTPUT}")
 
     if(DEFINED CONAN_VERSION)
+        execute_process(COMMAND ${CONAN_CMD} --version
+                        OUTPUT_VARIABLE CONAN_VERSION_OUTPUT
+                        ERROR_VARIABLE CONAN_VERSION_OUTPUT)
+        message(STATUS "Conan: Version found ${CONAN_VERSION_OUTPUT}")
+
         string(REGEX MATCH ".*Conan version ([0-9]+\.[0-9]+\.[0-9]+)" FOO
             "${CONAN_VERSION_OUTPUT}")
         if(${CMAKE_MATCH_1} VERSION_LESS ${CONAN_VERSION})
@@ -541,6 +543,8 @@ macro(conan_add_remote)
     # Example usage:
     #    conan_add_remote(NAME bincrafters INDEX 1
     #       URL https://api.bintray.com/conan/bincrafters/public-conan)
+    conan_check(REQUIRED)
+
     set(oneValueArgs URL NAME INDEX)
     cmake_parse_arguments(CONAN "" "${oneValueArgs}" "" ${ARGN})
 
